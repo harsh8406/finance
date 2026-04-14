@@ -6,6 +6,7 @@ export default function AuthPage({ theme, toggleTheme }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [nameError, setNameError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
 
@@ -35,14 +36,19 @@ export default function AuthPage({ theme, toggleTheme }) {
       display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: 0.8,
       textTransform: 'uppercase', color: dark ? 'rgba(255,255,255,0.4)' : '#64748b', marginBottom: 6,
     },
-    input: {
+    input: (hasError) => ({
       width: '100%',
       background: dark ? 'rgba(255,255,255,0.07)' : '#f8fafc',
-      border: dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0',
+      border: hasError
+        ? '1px solid #FF6B6B'
+        : dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0',
       borderRadius: 10, padding: '11px 14px',
       color: dark ? '#fff' : '#1a1a2e',
       fontSize: 14, fontFamily: "'DM Sans', sans-serif",
-      outline: 'none', boxSizing: 'border-box', marginBottom: 16,
+      outline: 'none', boxSizing: 'border-box', marginBottom: hasError ? 4 : 16,
+    }),
+    fieldError: {
+      fontSize: 11, color: '#FF6B6B', marginBottom: 12, marginTop: 2,
     },
     passwordWrapper: { position: 'relative', marginBottom: 16 },
     passwordInput: {
@@ -52,12 +58,6 @@ export default function AuthPage({ theme, toggleTheme }) {
       borderRadius: 10, padding: '11px 14px',
       color: dark ? '#fff' : '#1a1a2e',
       fontSize: 14, fontFamily: "'DM Sans', sans-serif",
-    },
-    eyeBtn: {
-      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-      background: 'none', border: 'none', cursor: 'pointer',
-      color: dark ? 'rgba(255,255,255,0.45)' : '#94a3b8',
-      display: 'flex', alignItems: 'center', padding: 4,
     },
     btn: {
       width: '100%', background: '#FF6B6B', color: '#fff', border: 'none',
@@ -84,15 +84,44 @@ export default function AuthPage({ theme, toggleTheme }) {
     },
   };
 
-
+  const handleNameChange = (e) => {
+    const val = e.target.value;
+    // Only allow letters, spaces, apostrophes, hyphens and dots
+    if (/^[a-zA-Z\s'.-]*$/.test(val)) {
+      setForm(p => ({ ...p, name: val }));
+      // Clear error once they start typing valid input
+      if (nameError) setNameError('');
+    }
+    // If they try to type a number or symbol, show error but don't update
+    else {
+      setNameError('⚠️ Name cannot contain numbers or symbols');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validate name on submit too
+    if (mode === 'register') {
+      if (!form.name.trim()) {
+        setNameError('⚠️ Please enter your full name');
+        return;
+      }
+      if (form.name.trim().length < 2) {
+        setNameError('⚠️ Name must be at least 2 characters');
+        return;
+      }
+      if (!/^[a-zA-Z\s'.-]+$/.test(form.name.trim())) {
+        setNameError('⚠️ Name can only contain letters');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (mode === 'login') await login(form.email, form.password);
-      else await register(form.name, form.email, form.password);
+      else await register(form.name.trim(), form.email, form.password);
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong');
     } finally {
@@ -103,12 +132,12 @@ export default function AuthPage({ theme, toggleTheme }) {
   return (
     <div style={S.page}>
       <style>{`
-      input::-ms-reveal,
-      input::-webkit-contacts-auto-fill-button,
-      input::-webkit-credentials-auto-fill-button {
-        filter: ${dark ? 'invert(1)' : 'invert(0)'} !important;
-      }
-    `}</style>
+        input::-ms-reveal,
+        input::-webkit-contacts-auto-fill-button,
+        input::-webkit-credentials-auto-fill-button {
+          filter: ${dark ? 'invert(1)' : 'invert(0)'} !important;
+        }
+      `}</style>
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet" />
       <div style={S.card}>
 
@@ -129,17 +158,19 @@ export default function AuthPage({ theme, toggleTheme }) {
             <>
               <label style={S.label}>Full Name</label>
               <input
-                style={S.input} placeholder="Arjun Sharma"
+                style={S.input(!!nameError)}
+                placeholder="Arjun Sharma"
                 value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                onChange={handleNameChange}
                 required
               />
+              {nameError && <div style={S.fieldError}>{nameError}</div>}
             </>
           )}
 
           <label style={S.label}>Email</label>
           <input
-            style={S.input} type="email" placeholder="you@example.com"
+            style={S.input(false)} type="email" placeholder="you@example.com"
             value={form.email}
             onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
             required
@@ -155,7 +186,6 @@ export default function AuthPage({ theme, toggleTheme }) {
               onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
               required
             />
-            
           </div>
 
           <button style={{ ...S.btn, opacity: loading ? 0.6 : 1 }} type="submit" disabled={loading}>
@@ -167,7 +197,12 @@ export default function AuthPage({ theme, toggleTheme }) {
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
           <span
             style={S.toggleLink}
-            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setShowPassword(false); }}
+            onClick={() => {
+              setMode(mode === 'login' ? 'register' : 'login');
+              setError('');
+              setNameError('');
+              setShowPassword(false);
+            }}
           >
             {mode === 'login' ? 'Register' : 'Sign In'}
           </span>

@@ -20,7 +20,6 @@ const getCat = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[7];
 function BudgetAlert({ dark, totalSpent, budget, onClose }) {
   const over = totalSpent - budget;
   const pct  = budget > 0 ? (totalSpent / budget) * 100 : 0;
-
   return (
     <div style={{
       position: 'fixed', top: 24, right: 24, zIndex: 1000,
@@ -35,9 +34,7 @@ function BudgetAlert({ dark, totalSpent, budget, onClose }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ fontSize: 28, lineHeight: 1 }}>🚨</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B6B', marginBottom: 4 }}>
-            Budget Exceeded!
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B6B', marginBottom: 4 }}>Budget Exceeded!</div>
           <div style={{ fontSize: 13, color: dark ? 'rgba(255,255,255,0.7)' : '#64748b', lineHeight: 1.5 }}>
             You've spent {formatINR(totalSpent)} against a budget of {formatINR(budget)}.{' '}
             You are <span style={{ color: '#FF6B6B', fontWeight: 700 }}>{formatINR(over)}</span> over budget.
@@ -48,9 +45,7 @@ function BudgetAlert({ dark, totalSpent, budget, onClose }) {
       <div style={{ marginTop: 12, height: 4, background: 'rgba(255,107,107,0.2)', borderRadius: 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: '100%', background: '#FF6B6B', borderRadius: 2 }} />
       </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: '#FF6B6B', fontWeight: 600 }}>
-        {pct.toFixed(0)}% of budget used
-      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: '#FF6B6B', fontWeight: 600 }}>{pct.toFixed(0)}% of budget used</div>
     </div>
   );
 }
@@ -118,7 +113,6 @@ function SmsToast({ dark, onConfirm, onDelete }) {
         </div>
         <button onClick={() => setPending(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: S.muted, lineHeight: 1 }}>✕</button>
       </div>
-
       {editing ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
           <input style={{ padding: '8px 12px', borderRadius: 8, background: S.inputBg, border: S.inputBd, color: S.text, fontSize: 13 }} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Merchant name" />
@@ -134,7 +128,6 @@ function SmsToast({ dark, onConfirm, onDelete }) {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: cat.color + '22', color: cat.color, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{cat.icon} {cat.label}</div>
         </div>
       )}
-
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={remove} style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(255,107,107,0.1)', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🗑</button>
         <button onClick={() => setEditing(e => !e)} style={{ padding: '8px 12px', borderRadius: 8, background: dark ? 'rgba(255,255,255,0.08)' : '#f1f5f9', border: 'none', color: S.muted, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{editing ? 'Preview' : '✏️ Edit'}</button>
@@ -215,17 +208,17 @@ export default function Dashboard({ theme, toggleTheme }) {
   const dark = theme === 'dark';
   const S = useMemo(() => makeStyles(dark), [dark]);
 
-  const [view,             setView]           = useState('dashboard');
-  const [expenses,         setExpenses]       = useState([]);
-  const [budget,           setBudget]         = useState(15000);
-  const [analytics,        setAnalytics]      = useState(null);
-  const [filterCat,        setFilterCat]      = useState('all');
-  const [sortBy,           setSortBy]         = useState('date');
-  const [showForm,         setShowForm]       = useState(false);
-  const [editId,           setEditId]         = useState(null);
-  const [loading,          setLoading]        = useState(false);
-  const [amountError,      setAmountError]    = useState('');
-  const [showBudgetAlert,  setShowBudgetAlert]= useState(false);
+  const [view,            setView]           = useState('dashboard');
+  const [expenses,        setExpenses]       = useState([]);
+  const [budget,          setBudget]         = useState(15000);
+  const [analytics,       setAnalytics]      = useState(null);
+  const [filterCat,       setFilterCat]      = useState('all');
+  const [sortBy,          setSortBy]         = useState('date');
+  const [showForm,        setShowForm]       = useState(false);
+  const [editId,          setEditId]         = useState(null);
+  const [loading,         setLoading]        = useState(false);
+  const [amountError,     setAmountError]    = useState('');
+  const [showBudgetAlert, setShowBudgetAlert]= useState(false);
   const prevTotalRef = useRef(0);
 
   const [form, setForm] = useState({
@@ -263,13 +256,10 @@ export default function Dashboard({ theme, toggleTheme }) {
   const budgetPct     = Math.min(100, (totalSpent / budget) * 100);
   const progressColor = (p) => p > 85 ? '#FF6B6B' : p > 60 ? '#FFE66D' : '#4ECDC4';
 
-  // ── Trigger budget alert when total crosses budget threshold ──
   useEffect(() => {
     if (totalSpent === 0 || budget === 0) return;
     const prev = prevTotalRef.current;
-    if (totalSpent >= budget && prev < budget && prev !== 0) {
-      setShowBudgetAlert(true);
-    }
+    if (totalSpent >= budget && prev < budget && prev !== 0) setShowBudgetAlert(true);
     prevTotalRef.current = totalSpent;
   }, [totalSpent, budget]);
 
@@ -300,7 +290,7 @@ export default function Dashboard({ theme, toggleTheme }) {
     if (!form.title.trim()) { alert('Please enter a title.'); return; }
     const amt = Number(form.amount);
     if (!form.amount || amt < 1) { setAmountError('⚠️ Amount must be at least ₹1'); return; }
-    if (form.date < minDate || form.date > maxDate) { alert(`Date must be within the last 5 days. Future dates are not allowed.`); return; }
+    if (form.date < minDate || form.date > maxDate) { alert('Date must be within the last 5 days. Future dates are not allowed.'); return; }
     try {
       if (editId) { await api.put(`/expenses/${editId}`, { ...form, amount: amt }); }
       else { await api.post('/expenses', { ...form, amount: amt }); }
@@ -362,7 +352,6 @@ export default function Dashboard({ theme, toggleTheme }) {
               <div style={S.pageHeader}>Good {now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0]} 👋</div>
               <div style={S.sub}>Your financial overview for {now.toLocaleString('default', { month: 'long' })} {year}</div>
 
-              {/* Inline budget exceeded banner */}
               {totalSpent >= budget && budget > 0 && (
                 <div style={{ marginBottom: 20, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.35)', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 22 }}>🚨</span>
@@ -376,9 +365,9 @@ export default function Dashboard({ theme, toggleTheme }) {
 
               <div style={S.grid}>
                 {[
-                  { label: 'Total Spent',   value: formatINR(totalSpent),                        sub: `${analytics?.count || 0} transactions`,          color: '#FF6B6B' },
-                  { label: 'Remaining',     value: formatINR(Math.max(0, remaining)),             sub: remaining < 0 ? 'Over budget!' : `${(100 - budgetPct).toFixed(0)}% left`, color: remaining < 0 ? '#FF6B6B' : '#4ECDC4' },
-                  { label: 'Daily Average', value: formatINR(analytics?.avgPerDay || 0),          sub: 'this month',                                     color: '#FFE66D' },
+                  { label: 'Total Spent',   value: formatINR(totalSpent),               sub: `${analytics?.count || 0} transactions`, color: '#FF6B6B' },
+                  { label: 'Remaining',     value: formatINR(Math.max(0, remaining)),    sub: remaining < 0 ? 'Over budget!' : `${(100 - budgetPct).toFixed(0)}% left`, color: remaining < 0 ? '#FF6B6B' : '#4ECDC4' },
+                  { label: 'Daily Average', value: formatINR(analytics?.avgPerDay || 0), sub: 'this month', color: '#FFE66D' },
                   { label: 'Top Category',  value: topCategories[0] ? `${topCategories[0].icon} ${topCategories[0].label.split(' ')[0]}` : '—', sub: topCategories[0] ? formatINR(topCategories[0].total) : '—', color: '#C3B1E1' },
                 ].map((c, i) => (
                   <div key={i} style={S.card}>
@@ -409,7 +398,6 @@ export default function Dashboard({ theme, toggleTheme }) {
                     </div>
                   </div>
                 </div>
-
                 <div style={{ ...S.card, flex: 1.5 }}>
                   <div style={S.cardLabel}>By Category</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
@@ -464,7 +452,7 @@ export default function Dashboard({ theme, toggleTheme }) {
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: S.textMuted }}>Sort:</span>
-                {['date', 'amount', 'title'].map(s => (
+                {['date', 'amount'].map(s => (
                   <button key={s} onClick={() => setSortBy(s)} style={{ ...S.btn(sortBy === s), padding: '5px 12px', fontSize: 12 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</button>
                 ))}
               </div>
@@ -627,12 +615,12 @@ export default function Dashboard({ theme, toggleTheme }) {
         )}
       </div>
 
-      {/* ── BUDGET EXCEEDED POPUP — slides in from top right ── */}
+      {/* ── BUDGET EXCEEDED POPUP ── */}
       {showBudgetAlert && (
         <BudgetAlert dark={dark} totalSpent={totalSpent} budget={budget} onClose={() => setShowBudgetAlert(false)} />
       )}
 
-      {/* ── SMS IMPORT TOAST — bottom right ── */}
+      {/* ── SMS IMPORT TOAST ── */}
       <SmsToast dark={dark} onConfirm={fetchAll} onDelete={fetchAll} />
     </>
   );
