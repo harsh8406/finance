@@ -13,13 +13,27 @@ const CATEGORIES = [
   { id: 'other',         label: 'Other',              icon: '📦', color: '#AAAAAA' },
 ];
 
-const formatINR = (val) => '₹' + Number(val).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-const getCat = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[7];
+const INCOME_SOURCES = [
+  { id: 'salary',     label: 'Salary',       icon: '💼' },
+  { id: 'freelance',  label: 'Freelance',    icon: '💻' },
+  { id: 'business',   label: 'Business',     icon: '🏪' },
+  { id: 'investment', label: 'Investment',   icon: '📈' },
+  { id: 'gift',       label: 'Gift',         icon: '🎁' },
+  { id: 'refund',     label: 'Refund',       icon: '↩️' },
+  { id: 'other',      label: 'Other',        icon: '💰' },
+];
 
-// ── Budget Alert Toast ────────────────────────────────────────────────────────
-function BudgetAlert({ dark, totalSpent, budget, onClose }) {
-  const over = totalSpent - budget;
-  const pct  = budget > 0 ? (totalSpent / budget) * 100 : 0;
+const formatINR = (val) => '₹' + Number(val).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const getCat    = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[7];
+const getSrc    = (id) => INCOME_SOURCES.find((s) => s.id === id) || INCOME_SOURCES[6];
+
+// ── Budget / Income Alert Toast ───────────────────────────────────────────────
+function BudgetAlert({ dark, totalSpent, totalIncome, onClose }) {
+  const over = totalSpent - totalIncome;
+  const pct  = totalIncome > 0 ? (totalSpent / totalIncome) * 100 : 0;
+
+  if (totalSpent < totalIncome) return null;
+
   return (
     <div style={{
       position: 'fixed', top: 24, right: 24, zIndex: 1000,
@@ -30,14 +44,14 @@ function BudgetAlert({ dark, totalSpent, budget, onClose }) {
       padding: '18px 20px', fontFamily: "'DM Sans', sans-serif",
       animation: 'slideIn 0.3s ease',
     }}>
-      <style>{`@keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+      <style>{`@keyframes slideIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }`}</style>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ fontSize: 28, lineHeight: 1 }}>🚨</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B6B', marginBottom: 4 }}>Budget Exceeded!</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#FF6B6B', marginBottom: 4 }}>Income Exceeded!</div>
           <div style={{ fontSize: 13, color: dark ? 'rgba(255,255,255,0.7)' : '#64748b', lineHeight: 1.5 }}>
-            You've spent {formatINR(totalSpent)} against a budget of {formatINR(budget)}.{' '}
-            You are <span style={{ color: '#FF6B6B', fontWeight: 700 }}>{formatINR(over)}</span> over budget.
+            You've spent {formatINR(totalSpent)} against an income of {formatINR(totalIncome)}.{' '}
+            You are <span style={{ color: '#FF6B6B', fontWeight: 700 }}>{formatINR(over)}</span> over your income.
           </div>
         </div>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#FF6B6B', lineHeight: 1, padding: 0 }}>✕</button>
@@ -45,93 +59,62 @@ function BudgetAlert({ dark, totalSpent, budget, onClose }) {
       <div style={{ marginTop: 12, height: 4, background: 'rgba(255,107,107,0.2)', borderRadius: 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: '100%', background: '#FF6B6B', borderRadius: 2 }} />
       </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: '#FF6B6B', fontWeight: 600 }}>{pct.toFixed(0)}% of budget used</div>
+      <div style={{ marginTop: 8, fontSize: 11, color: '#FF6B6B', fontWeight: 600 }}>{pct.toFixed(0)}% of income spent</div>
     </div>
   );
 }
 
-// ── SMS Import Toast ──────────────────────────────────────────────────────────
-function SmsToast({ dark, onConfirm, onDelete }) {
-  const [pending,  setPending]  = useState(null);
-  const [editing,  setEditing]  = useState(false);
-  const [form,     setForm]     = useState({});
-  const [checking, setChecking] = useState(false);
-
-  const S = useMemo(() => {
-    const bg     = dark ? '#1a1a2e' : '#ffffff';
-    const border = dark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #e2e8f0';
-    const text   = dark ? '#ffffff' : '#1a1a2e';
-    const muted  = dark ? 'rgba(255,255,255,0.45)' : '#64748b';
-    const inputBg= dark ? 'rgba(255,255,255,0.07)' : '#f8fafc';
-    const inputBd= dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0';
-    return { bg, border, text, muted, inputBg, inputBd };
-  }, [dark]);
-
-  useEffect(() => {
-    const check = async () => {
-      if (pending || checking) return;
-      setChecking(true);
-      try {
-        const res = await api.get('/expenses?sortBy=date&order=desc');
-        const smsExp = res.data.find(e => e.note?.startsWith('Auto-imported'));
-        if (smsExp) {
-          setPending(smsExp);
-          setForm({ title: smsExp.title, amount: smsExp.amount, category: smsExp.category });
-        }
-      } catch {}
-      finally { setChecking(false); }
-    };
-    check();
-    const iv = setInterval(check, 10000);
-    return () => clearInterval(iv);
-  }, [pending]);
-
-  if (!pending) return null;
-  const cat = getCat(form.category);
-
-  const confirm = async () => {
-    try {
-      await api.put(`/expenses/${pending._id}`, { ...form, amount: Number(form.amount), note: 'SMS import — confirmed' });
-      setPending(null);
-      onConfirm?.();
-    } catch (err) { alert(err.response?.data?.message || 'Could not save'); }
+// ── Spending Bar Chart ────────────────────────────────────────────────────────
+function SpendingBarChart({ analytics, dark }) {
+  const S = {
+    muted: dark ? 'rgba(255,255,255,0.4)' : '#64748b',
+    track: dark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+    grid:  dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
   };
 
-  const remove = async () => {
-    await api.delete(`/expenses/${pending._id}`);
-    setPending(null);
-    onDelete?.();
-  };
+  const data = useMemo(() => {
+    if (!analytics?.byCategory) return [];
+    return CATEGORIES
+      .map(c => ({ ...c, total: analytics.byCategory[c.id] || 0 }))
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [analytics]);
+
+  if (!data.length) return (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: S.muted, fontSize: 13 }}>No spending data yet this month</div>
+  );
+
+  const max = data[0].total;
+  const chartH = 200;
+  const barW   = Math.min(48, Math.floor((500 - data.length * 12) / data.length));
+  const gridLines = [0.25, 0.5, 0.75, 1].map(f => ({ y: chartH - chartH * f, f }));
 
   return (
-    <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 999, width: 320, background: S.bg, border: S.border, borderRadius: 18, boxShadow: '0 12px 40px rgba(0,0,0,0.25)', padding: '18px 20px', fontFamily: "'DM Sans', sans-serif" }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div style={{ fontSize: 26 }}>{cat.icon}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: S.text }}>New payment detected</div>
-          <div style={{ fontSize: 11, color: S.muted }}>via SMS auto-import</div>
-        </div>
-        <button onClick={() => setPending(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: S.muted, lineHeight: 1 }}>✕</button>
-      </div>
-      {editing ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-          <input style={{ padding: '8px 12px', borderRadius: 8, background: S.inputBg, border: S.inputBd, color: S.text, fontSize: 13 }} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Merchant name" />
-          <input style={{ padding: '8px 12px', borderRadius: 8, background: S.inputBg, border: S.inputBd, color: S.text, fontSize: 13 }} type="number" min="1" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="Amount" />
-          <select style={{ padding: '8px 12px', borderRadius: 8, background: dark ? '#1e1e2e' : '#f8fafc', border: S.inputBd, color: dark ? '#ffffff' : '#1a1a2e', fontSize: 13 }} value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
-            {CATEGORIES.map(c => (<option key={c.id} value={c.id} style={{ background: dark ? '#1e1e2e' : '#ffffff', color: dark ? '#ffffff' : '#1a1a2e' }}>{c.icon} {c.label}</option>))}
-          </select>
-        </div>
-      ) : (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 600, fontSize: 15, color: S.text, marginBottom: 2 }}>{form.title}</div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 24, color: '#FF6B6B', marginBottom: 4 }}>{formatINR(form.amount)}</div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: cat.color + '22', color: cat.color, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{cat.icon} {cat.label}</div>
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={remove} style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(255,107,107,0.1)', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🗑</button>
-        <button onClick={() => setEditing(e => !e)} style={{ padding: '8px 12px', borderRadius: 8, background: dark ? 'rgba(255,255,255,0.08)' : '#f1f5f9', border: 'none', color: S.muted, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{editing ? 'Preview' : '✏️ Edit'}</button>
-        <button onClick={confirm} style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: '#FF6B6B', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>✅ Confirm</button>
+    <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+      <div style={{ minWidth: data.length * (barW + 16) + 60, position: 'relative' }}>
+        <svg width="100%" height={chartH + 48} style={{ overflow: 'visible', display: 'block' }}>
+          {gridLines.map((gl, i) => (
+            <g key={i}>
+              <line x1={48} y1={gl.y + 4} x2="100%" y2={gl.y + 4} stroke={S.grid} strokeWidth={1} strokeDasharray="4 4" />
+              <text x={44} y={gl.y + 8} textAnchor="end" fontSize={9} fill={S.muted} fontFamily="'DM Sans', sans-serif">{formatINR(max * gl.f)}</text>
+            </g>
+          ))}
+          {data.map((cat, i) => {
+            const barH = Math.max(4, (cat.total / max) * chartH);
+            const x = 52 + i * (barW + 16);
+            const y = chartH - barH + 4;
+            const rx = Math.min(6, barW / 3);
+            return (
+              <g key={cat.id}>
+                <rect x={x} y={4} width={barW} height={chartH} rx={rx} fill={S.track} />
+                <rect x={x} y={y} width={barW} height={barH} rx={rx} fill={cat.color} />
+                <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize={9} fontWeight={700} fill={cat.color} fontFamily="'DM Sans', sans-serif">{formatINR(cat.total)}</text>
+                <text x={x + barW / 2} y={chartH + 22} textAnchor="middle" fontSize={16}>{cat.icon}</text>
+                <text x={x + barW / 2} y={chartH + 40} textAnchor="middle" fontSize={9} fill={S.muted} fontFamily="'DM Sans', sans-serif">{cat.label.split(' ')[0]}</text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
     </div>
   );
@@ -160,26 +143,26 @@ function DonutChart({ segments, size = 120, dark }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 function makeStyles(dark) {
-  const bg            = dark ? '#0A0A0F'                         : '#F0F2F5';
-  const surface       = dark ? 'rgba(255,255,255,0.05)'          : '#ffffff';
-  const surfaceBorder = dark ? '1px solid rgba(255,255,255,0.07)': '1px solid #e2e8f0';
-  const text          = dark ? '#ffffff'                         : '#1a1a2e';
-  const textMuted     = dark ? 'rgba(255,255,255,0.4)'           : '#64748b';
-  const inputBg       = dark ? 'rgba(255,255,255,0.07)'          : '#f8fafc';
-  const inputBorder   = dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0';
-  const rowBg         = dark ? 'rgba(255,255,255,0.04)'          : '#f8fafc';
-  const rowBorder     = dark ? '1px solid rgba(255,255,255,0.05)': '1px solid #e2e8f0';
-  const btnSecBg      = dark ? 'rgba(255,255,255,0.08)'          : '#f1f5f9';
-  const btnSecColor   = dark ? 'rgba(255,255,255,0.7)'           : '#475569';
-  const btnSecBorder  = dark ? 'none'                            : '1px solid #e2e8f0';
-  const sidebarBg     = dark ? 'rgba(255,255,255,0.03)'          : '#ffffff';
-  const sidebarBorder = dark ? '1px solid rgba(255,255,255,0.07)': '1px solid #e2e8f0';
-  const overlayCard   = dark ? '#111118'                         : '#ffffff';
-  const overlayBorder = dark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0';
-  const labelColor    = dark ? 'rgba(255,255,255,0.4)'           : '#64748b';
-  const progressTrack = dark ? 'rgba(255,255,255,0.1)'           : '#e2e8f0';
+  const bg            = dark ? '#0A0A0F'                          : '#F0F2F5';
+  const surface       = dark ? 'rgba(255,255,255,0.05)'           : '#ffffff';
+  const surfaceBorder = dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid #e2e8f0';
+  const text          = dark ? '#ffffff'                          : '#1a1a2e';
+  const textMuted     = dark ? 'rgba(255,255,255,0.4)'            : '#64748b';
+  const inputBg       = dark ? 'rgba(255,255,255,0.07)'           : '#f8fafc';
+  const inputBorder   = dark ? '1px solid rgba(255,255,255,0.1)'  : '1px solid #e2e8f0';
+  const rowBg         = dark ? 'rgba(255,255,255,0.04)'           : '#f8fafc';
+  const rowBorder     = dark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #e2e8f0';
+  const btnSecBg      = dark ? 'rgba(255,255,255,0.08)'           : '#f1f5f9';
+  const btnSecColor   = dark ? 'rgba(255,255,255,0.7)'            : '#475569';
+  const btnSecBorder  = dark ? 'none'                             : '1px solid #e2e8f0';
+  const sidebarBg     = dark ? 'rgba(255,255,255,0.03)'           : '#ffffff';
+  const sidebarBorder = dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid #e2e8f0';
+  const overlayCard   = dark ? '#111118'                          : '#ffffff';
+  const overlayBorder = dark ? '1px solid rgba(255,255,255,0.1)'  : '1px solid #e2e8f0';
+  const labelColor    = dark ? 'rgba(255,255,255,0.4)'            : '#64748b';
+  const progressTrack = dark ? 'rgba(255,255,255,0.1)'            : '#e2e8f0';
   return {
-    app:         { fontFamily:"'Inter', sans-serif", background: bg, minHeight: '100vh', color: text, display: 'flex', transition: 'background 0.3s, color 0.3s' },
+    app:         { fontFamily: "'Inter', sans-serif", background: bg, minHeight: '100vh', color: text, display: 'flex', transition: 'background 0.3s, color 0.3s' },
     sidebar:     { width: 220, background: sidebarBg, borderRight: sidebarBorder, display: 'flex', flexDirection: 'column', padding: '32px 0', flexShrink: 0, transition: 'background 0.3s' },
     logo:        { fontFamily: "'Poppins', sans-serif", fontWeight: 800, fontSize: 20, padding: '0 24px 32px', letterSpacing: '-0.5px', color: text },
     navItem: (a) => ({ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 24px', cursor: 'pointer', borderLeft: a ? '2px solid #FF6B6B' : '2px solid transparent', background: a ? 'rgba(255,107,107,0.08)' : 'transparent', color: a ? '#FF6B6B' : textMuted, fontSize: 14, fontWeight: 500, transition: 'all 0.2s', marginBottom: 2 }),
@@ -193,6 +176,7 @@ function makeStyles(dark) {
     expRow:      { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: rowBg, borderRadius: 12, marginBottom: 8, border: rowBorder, transition: 'background 0.3s' },
     pill: (c)   => ({ background: c + '22', color: c, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }),
     btn: (p)    => ({ background: p ? '#FF6B6B' : btnSecBg, color: p ? '#fff' : btnSecColor, border: p ? 'none' : btnSecBorder, borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.2s' }),
+    btnGreen: () => ({ background: '#4ECDC4', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.2s' }),
     formOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
     formCard:    { background: overlayCard, borderRadius: 20, padding: 32, width: 440, border: overlayBorder, boxShadow: '0 24px 64px rgba(0,0,0,0.3)' },
     label:       { fontSize: 11, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase', color: labelColor, marginBottom: 6, display: 'block' },
@@ -210,14 +194,18 @@ export default function Dashboard({ theme, toggleTheme }) {
 
   const [view,            setView]           = useState('dashboard');
   const [expenses,        setExpenses]       = useState([]);
+  const [incomes,         setIncomes]        = useState([]);
   const [budget,          setBudget]         = useState(15000);
   const [analytics,       setAnalytics]      = useState(null);
   const [filterCat,       setFilterCat]      = useState('all');
   const [sortBy,          setSortBy]         = useState('date');
   const [showForm,        setShowForm]       = useState(false);
+  const [showIncomeForm,  setShowIncomeForm]  = useState(false);
   const [editId,          setEditId]         = useState(null);
+  const [editIncomeId,    setEditIncomeId]    = useState(null);
   const [loading,         setLoading]        = useState(false);
   const [amountError,     setAmountError]    = useState('');
+  const [incAmountError,  setIncAmountError] = useState('');
   const [showBudgetAlert, setShowBudgetAlert]= useState(false);
   const prevTotalRef = useRef(0);
 
@@ -226,9 +214,14 @@ export default function Dashboard({ theme, toggleTheme }) {
     date: new Date().toISOString().slice(0, 10), note: '',
   });
 
-  const now   = new Date();
-  const month = now.getMonth() + 1;
-  const year  = now.getFullYear();
+  const [incomeForm, setIncomeForm] = useState({
+    title: '', amount: '', source: 'salary',
+    date: new Date().toISOString().slice(0, 10), note: '',
+  });
+
+  const now        = new Date();
+  const month      = now.getMonth() + 1;
+  const year       = now.getFullYear();
   const maxDate    = now.toISOString().slice(0, 10);
   const minDateObj = new Date(now);
   minDateObj.setDate(minDateObj.getDate() - 5);
@@ -237,31 +230,43 @@ export default function Dashboard({ theme, toggleTheme }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [expRes, budRes, anaRes] = await Promise.all([
+      const [expRes, budRes, anaRes, incRes] = await Promise.all([
         api.get(`/expenses?month=${month}&year=${year}&sortBy=${sortBy}`),
         api.get(`/budget?month=${month}&year=${year}`),
         api.get(`/expenses/analytics?month=${month}&year=${year}`),
+        api.get(`/income?month=${month}&year=${year}`),
       ]);
       setExpenses(expRes.data);
       setBudget(budRes.data.amount);
       setAnalytics(anaRes.data);
+      setIncomes(incRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [month, year, sortBy]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const totalSpent    = analytics?.total || 0;
-  const remaining     = budget - totalSpent;
-  const budgetPct     = Math.min(100, (totalSpent / budget) * 100);
+  const totalSpent  = analytics?.total || 0;
+  const totalIncome = useMemo(() => incomes.reduce((sum, i) => sum + i.amount, 0), [incomes]);
+  const balance     = totalIncome - totalSpent;
+  const spentPct    = totalIncome > 0 ? Math.min(100, (totalSpent / totalIncome) * 100) : 0;
+  const budgetPct   = Math.min(100, (totalSpent / budget) * 100);
+
   const progressColor = (p) => p > 85 ? '#FF6B6B' : p > 60 ? '#FFE66D' : '#4ECDC4';
 
   useEffect(() => {
-    if (totalSpent === 0 || budget === 0) return;
+    if (totalSpent === 0 || totalIncome === 0) return;
     const prev = prevTotalRef.current;
-    if (totalSpent >= budget && prev < budget && prev !== 0) setShowBudgetAlert(true);
+    if (totalSpent >= totalIncome && prev < totalIncome && prev !== 0) setShowBudgetAlert(true);
     prevTotalRef.current = totalSpent;
-  }, [totalSpent, budget]);
+  }, [totalSpent, totalIncome]);
+
+  useEffect(() => {
+    if (totalSpent < totalIncome) {
+      setShowBudgetAlert(false);
+      prevTotalRef.current = totalSpent;
+    }
+  }, [totalSpent, totalIncome]);
 
   const filtered = useMemo(() =>
     filterCat === 'all' ? expenses : expenses.filter(e => e.category === filterCat),
@@ -273,6 +278,7 @@ export default function Dashboard({ theme, toggleTheme }) {
       .filter(c => c.total > 0).sort((a, b) => b.total - a.total).slice(0, 5);
   }, [analytics]);
 
+  // ── Expense handlers ──
   const openAdd = () => {
     setEditId(null); setAmountError('');
     setForm({ title: '', amount: '', category: 'food', date: maxDate, note: '' });
@@ -290,10 +296,10 @@ export default function Dashboard({ theme, toggleTheme }) {
     if (!form.title.trim()) { alert('Please enter a title.'); return; }
     const amt = Number(form.amount);
     if (!form.amount || amt < 1) { setAmountError('⚠️ Amount must be at least ₹1'); return; }
-    if (form.date < minDate || form.date > maxDate) { alert('Date must be within the last 5 days. Future dates are not allowed.'); return; }
+    if (form.date < minDate || form.date > maxDate) { alert('Date must be within the last 5 days.'); return; }
     try {
-      if (editId) { await api.put(`/expenses/${editId}`, { ...form, amount: amt }); }
-      else { await api.post('/expenses', { ...form, amount: amt }); }
+      if (editId) await api.put(`/expenses/${editId}`, { ...form, amount: amt });
+      else        await api.post('/expenses', { ...form, amount: amt });
       setShowForm(false); setEditId(null); setAmountError('');
       setForm({ title: '', amount: '', category: 'food', date: maxDate, note: '' });
       await fetchAll();
@@ -303,6 +309,39 @@ export default function Dashboard({ theme, toggleTheme }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this expense?')) return;
     await api.delete(`/expenses/${id}`); fetchAll();
+  };
+
+  // ── Income handlers ──
+  const openAddIncome = () => {
+    setEditIncomeId(null); setIncAmountError('');
+    setIncomeForm({ title: '', amount: '', source: 'salary', date: maxDate, note: '' });
+    setShowIncomeForm(true);
+  };
+
+  const handleEditIncome = (inc) => {
+    setIncAmountError('');
+    setIncomeForm({ title: inc.title, amount: String(inc.amount), source: inc.source || 'salary', date: inc.date?.slice(0, 10) || maxDate, note: inc.note || '' });
+    setEditIncomeId(inc._id); setShowIncomeForm(true);
+  };
+
+  const handleIncomeSubmit = async () => {
+    setIncAmountError('');
+    if (!incomeForm.title.trim()) { alert('Please enter a title.'); return; }
+    const amt = Number(incomeForm.amount);
+    if (!incomeForm.amount || amt < 1) { setIncAmountError('⚠️ Amount must be at least ₹1'); return; }
+    if (incomeForm.date < minDate || incomeForm.date > maxDate) { alert('Date must be within the last 5 days.'); return; }
+    try {
+      if (editIncomeId) await api.put(`/income/${editIncomeId}`, { ...incomeForm, amount: amt });
+      else              await api.post('/income', { ...incomeForm, amount: amt });
+      setShowIncomeForm(false); setEditIncomeId(null); setIncAmountError('');
+      setIncomeForm({ title: '', amount: '', source: 'salary', date: maxDate, note: '' });
+      await fetchAll();
+    } catch (err) { alert(err.response?.data?.message || 'Error saving income'); }
+  };
+
+  const handleDeleteIncome = async (id) => {
+    if (!window.confirm('Delete this income entry?')) return;
+    await api.delete(`/income/${id}`); fetchAll();
   };
 
   const handleBudgetUpdate = async (val) => {
@@ -321,6 +360,7 @@ export default function Dashboard({ theme, toggleTheme }) {
           {[
             { id: 'dashboard', icon: '⬡', label: 'Dashboard' },
             { id: 'expenses',  icon: '◈', label: 'Expenses' },
+            { id: 'income',    icon: '◆', label: 'Income' },
             { id: 'analytics', icon: '◉', label: 'Analytics' },
             { id: 'budget',    icon: '◎', label: 'Budget' },
           ].map(n => (
@@ -336,8 +376,12 @@ export default function Dashboard({ theme, toggleTheme }) {
           </div>
           <div style={{ padding: '0 24px', marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: S.textMuted, marginBottom: 4 }}>👤 {user?.name}</div>
-            <div style={{ fontSize: 20, fontFamily: "'Syne', sans-serif", fontWeight: 700, color: S.text }}>{formatINR(totalSpent)}</div>
-            <div style={{ fontSize: 11, color: S.textMuted }}>spent this month</div>
+            <div style={{ fontSize: 11, color: '#4ECDC4', marginBottom: 2 }}>💰 Income: {formatINR(totalIncome)}</div>
+            <div style={{ fontSize: 11, color: '#FF6B6B', marginBottom: 2 }}>💸 Spent: {formatINR(totalSpent)}</div>
+            <div style={{ fontSize: 14, fontFamily: "'Syne', sans-serif", fontWeight: 700, color: balance >= 0 ? '#4ECDC4' : '#FF6B6B', marginTop: 4 }}>
+              {balance >= 0 ? '🟢' : '🔴'} {formatINR(Math.abs(balance))}
+            </div>
+            <div style={{ fontSize: 11, color: S.textMuted }}>{balance >= 0 ? 'remaining' : 'over income'}</div>
           </div>
           <button style={{ ...S.btn(false), margin: '0 16px', justifyContent: 'center' }} onClick={logout}>Sign Out</button>
         </div>
@@ -352,23 +396,77 @@ export default function Dashboard({ theme, toggleTheme }) {
               <div style={S.pageHeader}>Good {now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0]} 👋</div>
               <div style={S.sub}>Your financial overview for {now.toLocaleString('default', { month: 'long' })} {year}</div>
 
-              {totalSpent >= budget && budget > 0 && (
+              {/* ── Income / Spent / Balance hero strip ── */}
+              <div style={{ ...S.card, marginBottom: 24, padding: '20px 24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', gap: 0, alignItems: 'center' }}>
+                  {/* Income */}
+                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: 22, marginBottom: 4 }}>💰</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 6 }}>Income</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 20, color: '#4ECDC4' }}>{formatINR(totalIncome)}</div>
+                    <div style={{ fontSize: 11, color: S.textMuted, marginTop: 2 }}>{incomes.length} {incomes.length === 1 ? 'entry' : 'entries'}</div>
+                  </div>
+                  <div style={{ width: 1, height: 60, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', margin: '0 auto' }} />
+                  {/* Spent */}
+                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: 22, marginBottom: 4 }}>💸</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 6 }}>Spent</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 20, color: '#FF6B6B' }}>{formatINR(totalSpent)}</div>
+                    <div style={{ fontSize: 11, color: S.textMuted, marginTop: 2 }}>{analytics?.count || 0} transactions</div>
+                  </div>
+                  <div style={{ width: 1, height: 60, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', margin: '0 auto' }} />
+                  {/* Balance */}
+                  <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: 22, marginBottom: 4 }}>{balance >= 0 ? '🟢' : '🔴'}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 6 }}>Remaining</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 20, color: balance >= 0 ? '#4ECDC4' : '#FF6B6B' }}>{formatINR(Math.abs(balance))}</div>
+                    <div style={{ fontSize: 11, color: balance >= 0 ? '#4ECDC4' : '#FF6B6B', marginTop: 2 }}>{balance >= 0 ? `${(100 - spentPct).toFixed(0)}% of income left` : 'over income'}</div>
+                  </div>
+                </div>
+
+                {/* FIX 1: Progress bar + "Add income" button placed OUTSIDE the grid, below it */}
+                {totalIncome > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ height: 6, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${spentPct}%`, background: spentPct >= 100 ? '#FF6B6B' : spentPct > 75 ? '#FFE66D' : '#4ECDC4', borderRadius: 3, transition: 'width 0.6s ease' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11, color: S.textMuted }}>
+                      <span>{spentPct.toFixed(1)}% of income spent</span>
+                      <span style={{ color: balance >= 0 ? '#4ECDC4' : '#FF6B6B' }}>{balance >= 0 ? `${formatINR(balance)} left` : `${formatINR(Math.abs(balance))} over`}</span>
+                    </div>
+                  </div>
+                )}
+
+                {totalIncome === 0 && (
+                  <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
+                    <button
+                      style={{ ...S.btnGreen(), fontSize: 12, padding: '8px 20px' }}
+                      onClick={() => setView('income')}
+                    >
+                      + Add your income to get started
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Overspent warning */}
+              {totalSpent >= totalIncome && totalIncome > 0 && (
                 <div style={{ marginBottom: 20, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.35)', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 22 }}>🚨</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#FF6B6B' }}>Budget Exceeded</div>
-                    <div style={{ fontSize: 12, color: S.textMuted, marginTop: 2 }}>You are {formatINR(totalSpent - budget)} over your {formatINR(budget)} budget this month.</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#FF6B6B' }}>Spending Exceeds Income</div>
+                    <div style={{ fontSize: 12, color: S.textMuted, marginTop: 2 }}>You are {formatINR(totalSpent - totalIncome)} over your total income this month.</div>
                   </div>
-                  <button onClick={() => setView('budget')} style={{ ...S.btn(true), padding: '6px 14px', fontSize: 12 }}>Review</button>
+                  <button onClick={() => setView('income')} style={{ ...S.btn(true), padding: '6px 14px', fontSize: 12 }}>Review</button>
                 </div>
               )}
 
               <div style={S.grid}>
                 {[
-                  { label: 'Total Spent',   value: formatINR(totalSpent),               sub: `${analytics?.count || 0} transactions`, color: '#FF6B6B' },
-                  { label: 'Remaining',     value: formatINR(Math.max(0, remaining)),    sub: remaining < 0 ? 'Over budget!' : `${(100 - budgetPct).toFixed(0)}% left`, color: remaining < 0 ? '#FF6B6B' : '#4ECDC4' },
-                  { label: 'Daily Average', value: formatINR(analytics?.avgPerDay || 0), sub: 'this month', color: '#FFE66D' },
+                  { label: 'Daily Average', value: formatINR(analytics?.avgPerDay || 0), sub: 'per day this month',       color: '#FFE66D' },
                   { label: 'Top Category',  value: topCategories[0] ? `${topCategories[0].icon} ${topCategories[0].label.split(' ')[0]}` : '—', sub: topCategories[0] ? formatINR(topCategories[0].total) : '—', color: '#C3B1E1' },
+                  { label: 'Budget Limit',  value: formatINR(budget), sub: `${budgetPct.toFixed(0)}% used`,              color: budgetPct >= 100 ? '#FF6B6B' : '#74B9FF' },
+                  { label: 'Savings Rate',  value: totalIncome > 0 ? `${Math.max(0, 100 - spentPct).toFixed(0)}%` : '—', sub: totalIncome > 0 ? formatINR(Math.max(0, balance)) + ' saved' : 'Add income first', color: '#A8E6CF' },
                 ].map((c, i) => (
                   <div key={i} style={S.card}>
                     <div style={S.cardLabel}>{c.label}</div>
@@ -380,20 +478,20 @@ export default function Dashboard({ theme, toggleTheme }) {
 
               <div style={S.row}>
                 <div style={{ ...S.card, flex: 1 }}>
-                  <div style={S.cardLabel}>Budget Health</div>
+                  <div style={S.cardLabel}>Income vs Spending</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 8 }}>
                     <div style={{ position: 'relative' }}>
                       <DonutChart dark={dark} size={100} segments={[
-                        { color: budgetPct >= 100 ? '#FF6B6B' : budgetPct > 85 ? '#FFE66D' : '#4ECDC4', value: totalSpent },
-                        { color: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', value: Math.max(0, budget - totalSpent) },
+                        { color: spentPct >= 100 ? '#FF6B6B' : spentPct > 75 ? '#FFE66D' : '#4ECDC4', value: totalSpent },
+                        { color: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', value: Math.max(0, totalIncome - totalSpent) },
                       ]} />
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: S.text }}>{budgetPct.toFixed(0)}%</div>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, fontFamily: "'Syne', sans-serif", color: S.text }}>{spentPct.toFixed(0)}%</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, color: S.textMuted }}>Budget: {formatINR(budget)}</div>
-                      <div style={{ fontSize: 13, color: '#FF6B6B', marginTop: 4 }}>Spent: {formatINR(totalSpent)}</div>
-                      <div style={{ fontSize: 13, color: remaining < 0 ? '#FF6B6B' : '#4ECDC4', marginTop: 4 }}>
-                        {remaining < 0 ? `Over: ${formatINR(Math.abs(remaining))}` : `Left: ${formatINR(remaining)}`}
+                      <div style={{ fontSize: 13, color: '#4ECDC4' }}>💰 {formatINR(totalIncome)}</div>
+                      <div style={{ fontSize: 13, color: '#FF6B6B', marginTop: 4 }}>💸 {formatINR(totalSpent)}</div>
+                      <div style={{ fontSize: 13, color: balance >= 0 ? '#4ECDC4' : '#FF6B6B', marginTop: 4 }}>
+                        {balance >= 0 ? `🟢 ${formatINR(balance)}` : `🔴 ${formatINR(Math.abs(balance))} over`}
                       </div>
                     </div>
                   </div>
@@ -476,11 +574,90 @@ export default function Dashboard({ theme, toggleTheme }) {
             </div>
           )}
 
+          {/* ── INCOME ── */}
+          {view === 'income' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                <div><div style={S.pageHeader}>Income</div><div style={S.sub}>{incomes.length} {incomes.length === 1 ? 'entry' : 'entries'} this month</div></div>
+                {/* FIX 2: single "+ Add Income" button stays only here in the header */}
+                <button style={S.btnGreen()} onClick={openAddIncome}>+ Add Income</button>
+              </div>
+
+              {/* Income summary strip */}
+              <div style={{ ...S.card, marginBottom: 20, padding: '16px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 4 }}>Total Income</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: '#4ECDC4' }}>{formatINR(totalIncome)}</div>
+                  </div>
+                  <div style={{ width: 1, height: 40, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', margin: '0 auto' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 4 }}>Total Spent</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: '#FF6B6B' }}>{formatINR(totalSpent)}</div>
+                  </div>
+                  <div style={{ width: 1, height: 40, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', margin: '0 auto' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: S.textMuted, marginBottom: 4 }}>Balance</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: balance >= 0 ? '#4ECDC4' : '#FF6B6B' }}>{balance >= 0 ? '' : '-'}{formatINR(Math.abs(balance))}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* FIX 2: Empty state WITHOUT the duplicate "+ Add Income" button */}
+              {incomes.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: S.textMuted }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: S.text, marginBottom: 6 }}>No income added yet</div>
+                  <div style={{ fontSize: 13 }}>Add your salary, freelance earnings, or any other credits</div>
+                </div>
+              )}
+
+              {incomes.map((inc) => {
+                const src = getSrc(inc.source);
+                return (
+                  <div key={inc._id} style={S.expRow}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(78,205,196,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{src.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, fontSize: 14, color: S.text }}>{inc.title}</div>
+                      <div style={{ fontSize: 11, color: S.textMuted }}>{inc.date?.slice(0, 10)}{inc.note ? ' · ' + inc.note : ''}</div>
+                    </div>
+                    <div style={{ background: 'rgba(78,205,196,0.15)', color: '#4ECDC4', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>{src.label}</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16, minWidth: 80, textAlign: 'right', color: '#4ECDC4' }}>+{formatINR(inc.amount)}</div>
+                    <button onClick={() => handleEditIncome(inc)} style={{ ...S.btn(false), padding: '6px 10px' }}>✏️</button>
+                    <button onClick={() => handleDeleteIncome(inc._id)} style={{ ...S.btn(false), padding: '6px 10px', color: '#FF6B6B' }}>🗑</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* ── ANALYTICS ── */}
           {view === 'analytics' && analytics && (
             <div>
               <div style={S.pageHeader}>Analytics</div>
               <div style={S.sub}>Your spending patterns this month</div>
+
+              <div style={{ ...S.card, marginBottom: 20 }}>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 14, color: S.text }}>Monthly Overview</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    { label: '💰 Income',    value: totalIncome, color: '#4ECDC4', pct: 100 },
+                    { label: '💸 Spent',     value: totalSpent,  color: '#FF6B6B', pct: totalIncome > 0 ? (totalSpent / totalIncome) * 100 : 0 },
+                    { label: '🟢 Remaining', value: Math.max(0, balance), color: '#A8E6CF', pct: totalIncome > 0 ? Math.max(0, (balance / totalIncome) * 100) : 0 },
+                  ].map((row, i) => (
+                    <div key={i}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: S.text }}>{row.label}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: row.color }}>{formatINR(row.value)}</span>
+                      </div>
+                      <div style={{ height: 6, background: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, row.pct)}%`, background: row.color, borderRadius: 3, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div style={S.card}>
                 <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 18, color: S.text }}>Category Breakdown</div>
                 {CATEGORIES.map(c => {
@@ -500,18 +677,10 @@ export default function Dashboard({ theme, toggleTheme }) {
                   );
                 })}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 20 }}>
-                {[
-                  { label: 'Total Spent',     value: formatINR(analytics.total),                sub: `${analytics.count} transactions` },
-                  { label: 'Highest Expense', value: formatINR(analytics.highest?.amount || 0), sub: analytics.highest?.title },
-                  { label: 'Daily Average',   value: formatINR(analytics.avgPerDay),             sub: 'per day' },
-                ].map((s, i) => (
-                  <div key={i} style={S.card}>
-                    <div style={S.cardLabel}>{s.label}</div>
-                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 20, marginTop: 4, color: S.text }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: S.textMuted, marginTop: 4 }}>{s.sub}</div>
-                  </div>
-                ))}
+
+              <div style={{ ...S.card, marginTop: 20 }}>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 18, color: S.text }}>Spending by Category</div>
+                <SpendingBarChart analytics={analytics} dark={dark} />
               </div>
             </div>
           )}
@@ -523,7 +692,7 @@ export default function Dashboard({ theme, toggleTheme }) {
               <div style={S.sub}>Set your monthly spending limit</div>
               <div style={{ ...S.card, maxWidth: 520, marginBottom: 20 }}>
                 <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 18, marginBottom: 16, color: S.text }}>Monthly Budget</div>
-                <div style={{ fontSize: 36, fontFamily: "'Syne', sans-serif", fontWeight: 800, color: budgetPct >= 100 ? '#FF6B6B' : budgetPct > 85 ? '#FF6B6B' : '#4ECDC4', marginBottom: 16 }}>{formatINR(budget)}</div>
+                <div style={{ fontSize: 36, fontFamily: "'Syne', sans-serif", fontWeight: 800, color: budgetPct >= 100 ? '#FF6B6B' : budgetPct > 85 ? '#FFE66D' : '#4ECDC4', marginBottom: 16 }}>{formatINR(budget)}</div>
                 <input type="range" min={1000} max={100000} step={500} value={budget}
                   onChange={e => setBudget(Number(e.target.value))}
                   onMouseUp={e => handleBudgetUpdate(Number(e.target.value))}
@@ -537,16 +706,25 @@ export default function Dashboard({ theme, toggleTheme }) {
                 </div>
                 <div style={S.progressBar}><div style={{ height: '100%', width: `${budgetPct}%`, background: progressColor(budgetPct), borderRadius: 3, transition: 'width 0.6s ease' }} /></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, color: S.textMuted }}>
-                  <span>{budgetPct.toFixed(1)}% used</span>
-                  <span style={{ color: remaining < 0 ? '#FF6B6B' : S.textMuted }}>{remaining < 0 ? `${formatINR(Math.abs(remaining))} over budget` : `${formatINR(remaining)} remaining`}</span>
+                  <span>{budgetPct.toFixed(1)}% of budget used</span>
+                  <span style={{ color: totalSpent >= budget ? '#FF6B6B' : S.textMuted }}>{totalSpent >= budget ? `${formatINR(totalSpent - budget)} over budget` : `${formatINR(budget - totalSpent)} remaining`}</span>
                 </div>
+                {totalIncome > 0 && (
+                  <div style={{ marginTop: 14, padding: '12px 14px', background: dark ? 'rgba(78,205,196,0.08)' : 'rgba(78,205,196,0.06)', borderRadius: 10, border: '1px solid rgba(78,205,196,0.2)' }}>
+                    <div style={{ fontSize: 12, color: S.textMuted, marginBottom: 6 }}>Income context</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: S.text }}>💰 Income: <strong style={{ color: '#4ECDC4' }}>{formatINR(totalIncome)}</strong></span>
+                      <span style={{ color: S.text }}>🟢 Balance: <strong style={{ color: balance >= 0 ? '#4ECDC4' : '#FF6B6B' }}>{formatINR(Math.abs(balance))}</strong></span>
+                    </div>
+                  </div>
+                )}
                 {totalSpent >= budget && (
-                  <div style={{ marginTop: 16, background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#FF6B6B' }}>
+                  <div style={{ marginTop: 12, background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#FF6B6B' }}>
                     🚨 You have exceeded your budget by {formatINR(totalSpent - budget)}. Consider reviewing your expenses.
                   </div>
                 )}
                 {totalSpent < budget && budgetPct > 85 && (
-                  <div style={{ marginTop: 16, background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.3)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#FF6B6B' }}>
+                  <div style={{ marginTop: 12, background: 'rgba(255,231,109,0.1)', border: '1px solid rgba(255,231,109,0.3)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#FFE66D' }}>
                     ⚠️ You've used {budgetPct.toFixed(0)}% of your budget. Consider cutting back.
                   </div>
                 )}
@@ -574,7 +752,7 @@ export default function Dashboard({ theme, toggleTheme }) {
           )}
         </div>
 
-        {/* ── ADD / EDIT MODAL ── */}
+        {/* ── ADD / EDIT EXPENSE MODAL ── */}
         {showForm && (
           <div style={S.formOverlay} onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
             <div style={S.formCard}>
@@ -613,15 +791,52 @@ export default function Dashboard({ theme, toggleTheme }) {
             </div>
           </div>
         )}
+
+        {/* ── ADD / EDIT INCOME MODAL ── */}
+        {showIncomeForm && (
+          <div style={S.formOverlay} onClick={e => { if (e.target === e.currentTarget) setShowIncomeForm(false); }}>
+            <div style={S.formCard}>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 20, marginBottom: 24, color: S.text }}>{editIncomeId ? 'Edit Income' : 'Add Income'}</div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={S.label}>Title</label>
+                <input style={S.input} placeholder="e.g. Monthly Salary" value={incomeForm.title} onChange={e => setIncomeForm(p => ({ ...p, title: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>Amount (₹)</label>
+                  <input style={{ ...S.input, borderColor: incAmountError ? '#FF6B6B' : undefined }} type="number" placeholder="1" min="1" step="1" value={incomeForm.amount}
+                    onChange={e => { setIncAmountError(''); setIncomeForm(p => ({ ...p, amount: e.target.value })); }} />
+                  {incAmountError && <div style={{ fontSize: 11, color: '#FF6B6B', marginTop: 5 }}>{incAmountError}</div>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>Date</label>
+                  <input style={S.input} type="date" value={incomeForm.date} min={minDate} max={maxDate} onChange={e => setIncomeForm(p => ({ ...p, date: e.target.value }))} />
+                  <div style={{ fontSize: 11, color: S.textMuted, marginTop: 5 }}>Last 5 days only · No future dates</div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={S.label}>Source</label>
+                <select style={{ ...S.input, cursor: 'pointer' }} value={incomeForm.source} onChange={e => setIncomeForm(p => ({ ...p, source: e.target.value }))}>
+                  {INCOME_SOURCES.map(s => (<option key={s.id} value={s.id} style={{ background: dark ? '#111' : '#fff', color: dark ? '#fff' : '#1a1a2e' }}>{s.icon} {s.label}</option>))}
+                </select>
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={S.label}>Note (optional)</label>
+                <input style={S.input} placeholder="Add a note..." value={incomeForm.note} onChange={e => setIncomeForm(p => ({ ...p, note: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button style={{ ...S.btn(false), flex: 1, justifyContent: 'center' }} onClick={() => setShowIncomeForm(false)}>Cancel</button>
+                <button style={{ ...S.btnGreen(), flex: 1, justifyContent: 'center' }} onClick={handleIncomeSubmit}>{editIncomeId ? 'Save Changes' : 'Add Income'}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── BUDGET EXCEEDED POPUP ── */}
+      {/* ── INCOME EXCEEDED POPUP ── */}
       {showBudgetAlert && (
-        <BudgetAlert dark={dark} totalSpent={totalSpent} budget={budget} onClose={() => setShowBudgetAlert(false)} />
+        <BudgetAlert dark={dark} totalSpent={totalSpent} totalIncome={totalIncome} onClose={() => setShowBudgetAlert(false)} />
       )}
-
-      {/* ── SMS IMPORT TOAST ── */}
-      <SmsToast dark={dark} onConfirm={fetchAll} onDelete={fetchAll} />
     </>
   );
 }
